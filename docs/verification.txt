@@ -1,5 +1,0 @@
-Original lines: 4451
-Original bytes: 130860
-Reconstructed bytes with separator newlines: 130873
-All original line ranges allocated: yes
-Note: main.lua inserts blank lines between chunks; this does not remove code.
