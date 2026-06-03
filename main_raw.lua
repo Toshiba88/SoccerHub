@@ -1,8 +1,9 @@
 --// Soccer Hub - main_raw.lua
 --// Loader raw GitHub pour la version modulaire.
---// Ajout : statut visuel des modules sur l'accueil.
+--// Fix : cache-buster sur chaque module pour éviter l'ancien cache raw GitHub.
 
 local BASE = "https://raw.githubusercontent.com/Toshiba88/SoccerHub/main/"
+local CACHE_BUSTER = tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
 
 local ModuleStatus = {}
 local ModuleStatusOrder = {}
@@ -43,8 +44,10 @@ end
 
 local function Get(name, path, expectedFields)
     local src
+    local url = BASE .. path .. "?v=" .. CACHE_BUSTER
+
     local okHttp, httpErr = pcall(function()
-        src = game:HttpGet(BASE .. path)
+        src = game:HttpGet(url)
     end)
 
     if not okHttp or type(src) ~= "string" or src == "" then
@@ -119,14 +122,14 @@ local function BuildModuleStatusContent()
     for _, moduleData in ipairs(__SoccerHubModuleStatus) do
         if moduleData.ok then
             okCount += 1
-            table.insert(lines, "🟢   " .. tostring(moduleData.name))
+            table.insert(lines, "OK   " .. tostring(moduleData.name))
         else
-            table.insert(lines, "🔴   " .. tostring(moduleData.name) .. " | " .. tostring(moduleData.detail))
+            table.insert(lines, "FAIL " .. tostring(moduleData.name) .. " | " .. tostring(moduleData.detail))
         end
     end
 
     table.insert(lines, 1, "")
-    table.insert(lines, 2, "CHARGÉS : " .. tostring(okCount) .. "/" .. tostring(#__SoccerHubModuleStatus))
+    table.insert(lines, 2, "CHARGES : " .. tostring(okCount) .. "/" .. tostring(#__SoccerHubModuleStatus))
     table.insert(lines, 3, "")
 
     return table.concat(lines, "\n")
@@ -152,7 +155,8 @@ pcall(function()
             loaded += 1
         end
     end
-    Log("Modules chargés : " .. tostring(loaded) .. "/" .. tostring(#__SoccerHubModuleStatus), "[MODULES]")
+
+    Log("Modules charges : " .. tostring(loaded) .. "/" .. tostring(#__SoccerHubModuleStatus), "[MODULES]")
 end)
 ]])
 
@@ -181,8 +185,10 @@ local source = table.concat({
 }, "\n\n")
 
 local fn, err = loadstring(source)
+
 if not fn then
     local report = {}
+
     table.insert(report, "Erreur compilation SoccerHub modulaire : " .. tostring(err))
     table.insert(report, "")
     table.insert(report, "Statut modules :")
