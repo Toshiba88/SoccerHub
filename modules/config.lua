@@ -1,7 +1,8 @@
 --//====================================================
 --// Soccer Hub - config.lua
---// Fichier généré par découpage depuis soccer_hub_v33_index_order_fixed.lua
---// Revert safe : évite l'erreur Out of local registers
+--// Version safe
+--// Important : ne pas ajouter de gros bloc local ici.
+--// Ce module continue le if ouvert à la fin de modules/antiafk.lua
 --//====================================================
 
 return {
