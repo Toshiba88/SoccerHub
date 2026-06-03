@@ -1,6 +1,7 @@
 --// Soccer Hub - main_raw.lua
 --// Loader raw GitHub pour la version modulaire.
 --// Fix : cache-buster sur chaque module pour éviter l'ancien cache raw GitHub.
+--// Restore : pastilles de couleur dans le statut des modules.
 
 local BASE = "https://raw.githubusercontent.com/Toshiba88/SoccerHub/main/"
 local CACHE_BUSTER = tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
@@ -122,14 +123,14 @@ local function BuildModuleStatusContent()
     for _, moduleData in ipairs(__SoccerHubModuleStatus) do
         if moduleData.ok then
             okCount += 1
-            table.insert(lines, "OK   " .. tostring(moduleData.name))
+            table.insert(lines, "🟢   " .. tostring(moduleData.name))
         else
-            table.insert(lines, "FAIL " .. tostring(moduleData.name) .. " | " .. tostring(moduleData.detail))
+            table.insert(lines, "🔴   " .. tostring(moduleData.name) .. " | " .. tostring(moduleData.detail))
         end
     end
 
     table.insert(lines, 1, "")
-    table.insert(lines, 2, "CHARGES : " .. tostring(okCount) .. "/" .. tostring(#__SoccerHubModuleStatus))
+    table.insert(lines, 2, "CHARGÉS : " .. tostring(okCount) .. "/" .. tostring(#__SoccerHubModuleStatus))
     table.insert(lines, 3, "")
 
     return table.concat(lines, "\n")
@@ -156,7 +157,7 @@ pcall(function()
         end
     end
 
-    Log("Modules charges : " .. tostring(loaded) .. "/" .. tostring(#__SoccerHubModuleStatus), "[MODULES]")
+    Log("Modules chargés : " .. tostring(loaded) .. "/" .. tostring(#__SoccerHubModuleStatus), "[MODULES]")
 end)
 ]])
 
