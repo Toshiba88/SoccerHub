@@ -5,13 +5,7 @@
 local ShopOpener = {}
 
 ShopOpener.Name = "ShopOpener"
-ShopOpener.Version = "1.0.0"
-
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer and LocalPlayer:WaitForChild("PlayerGui")
+ShopOpener.Version = "1.0.1"
 
 local Config = {
     ShopIds = {
@@ -22,7 +16,6 @@ local Config = {
             ControllerPaths = {
                 "ReplicatedStorage.Source.Client.UI.GemShop.GemShopController",
             },
-            GuiNames = { "GemShop" },
         },
 
         Wish = {
@@ -32,7 +25,6 @@ local Config = {
             ControllerPaths = {
                 "ReplicatedStorage.Source.Client.UI.Gacha.GachaController",
             },
-            GuiNames = { "Gacha", "Wish" },
         },
 
         CraftShop = {
@@ -42,7 +34,6 @@ local Config = {
             ControllerPaths = {
                 "ReplicatedStorage.Source.Client.UI.CraftShop.CraftShopController",
             },
-            GuiNames = { "CraftShop" },
         },
     }
 }
@@ -54,9 +45,17 @@ local LastLog = {}
 local function addLog(tag, msg)
     local line = "[" .. os.date("%H:%M:%S") .. "] [" .. tostring(tag) .. "] " .. tostring(msg)
     table.insert(LastLog, line)
-    while #LastLog > 120 do
+
+    while #LastLog > 80 do
         table.remove(LastLog, 1)
     end
+
+    pcall(function()
+        if Log then
+            Log(tostring(msg), "[SHOP]")
+        end
+    end)
+
     return line
 end
 
@@ -125,6 +124,7 @@ local function getLoadedModulesSafe()
     end
 
     local modules = {}
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
     for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
         if obj:IsA("ModuleScript") then
@@ -252,7 +252,6 @@ end
 
 local function callUiManagerOpen(uiId)
     local success = false
-    local errors = {}
 
     for _, entry in ipairs(UiManagers) do
         local manager = entry.Table
@@ -263,15 +262,11 @@ local function callUiManagerOpen(uiId)
 
             if ok then
                 success = true
-                addLog("OPEN_OK", "UIManager.open(" .. tostring(uiId) .. ") | gc#" .. tostring(entry.Index))
+                addLog("OPEN_OK", "UIManager.open(" .. tostring(uiId) .. ")")
             else
-                table.insert(errors, "gc#" .. tostring(entry.Index) .. "=" .. tostring(res))
+                addLog("OPEN_FAIL", "UIManager.open(" .. tostring(uiId) .. ") | " .. tostring(res))
             end
         end
-    end
-
-    if not success and #errors > 0 then
-        addLog("OPEN_FAIL", "UIManager.open(" .. tostring(uiId) .. ") errors=" .. table.concat(errors, " || "))
     end
 
     return success
@@ -295,63 +290,7 @@ local function callControllerOpen(shopKey)
                     success = true
                     addLog("OPEN_OK", "Controller." .. name .. "() | " .. getPath(module))
                 else
-                    addLog("OPEN_FAIL", "Controller." .. name .. "() | " .. getPath(module) .. " | " .. tostring(res))
-                end
-            end
-        end
-    end
-
-    return success
-end
-
-local function callUiManagerClose(uiId)
-    local success = false
-
-    for _, entry in ipairs(UiManagers) do
-        local manager = entry.Table
-
-        for _, name in ipairs({ "close", "closeCurrentUI", "forceClose" }) do
-            local fn = rawget(manager, name)
-
-            if typeof(fn) == "function" then
-                local ok = false
-
-                if name == "close" or name == "forceClose" then
-                    ok = select(1, tryCallFunction(fn, manager, uiId))
-                else
-                    ok = select(1, tryCallFunction(fn, manager))
-                end
-
-                if ok then
-                    success = true
-                    addLog("CLOSE_OK", "UIManager." .. name .. "(" .. tostring(uiId) .. ")")
-                end
-            end
-        end
-    end
-
-    return success
-end
-
-local function callControllerClose(shopKey)
-    local success = false
-    local list = Controllers[shopKey] or {}
-
-    for _, entry in ipairs(list) do
-        local ctrl = entry.Table
-        local module = entry.Module
-
-        for _, name in ipairs({ "close", "Close", "hide", "Hide" }) do
-            local fn = rawget(ctrl, name)
-
-            if typeof(fn) == "function" then
-                local ok, res = tryCallFunction(fn, ctrl)
-
-                if ok then
-                    success = true
-                    addLog("CLOSE_OK", "Controller." .. name .. "() | " .. getPath(module))
-                else
-                    addLog("CLOSE_FAIL", "Controller." .. name .. "() | " .. getPath(module) .. " | " .. tostring(res))
+                    addLog("OPEN_FAIL", "Controller." .. name .. "() | " .. tostring(res))
                 end
             end
         end
@@ -390,61 +329,36 @@ function ShopOpener.Open(shopKey)
     return ok
 end
 
-function ShopOpener.Close(shopKey)
-    local data = Config.ShopIds[shopKey]
-    if not data then
-        addLog("ERROR", "Shop inconnu : " .. tostring(shopKey))
-        return false
-    end
-
-    ShopOpener.RefreshRuntimeObjects()
-    addLog("ACTION", "Fermeture vraie demandée : " .. data.Display)
-
-    local ok = false
-
-    for _, uiId in ipairs(data.UIIds) do
-        if callUiManagerClose(uiId) then
-            ok = true
-            break
+local function notifySafe(Fluent, title, content)
+    pcall(function()
+        if Fluent and Fluent.Notify then
+            Fluent:Notify({
+                Title = title,
+                Content = content,
+                Duration = 3
+            })
         end
-    end
-
-    if not ok then
-        ok = callControllerClose(shopKey)
-    end
-
-    if not ok then
-        addLog("CLOSE_FAIL", data.Display .. " non fermé via controller/UIManager.")
-    end
-
-    return ok
+    end)
 end
 
-function ShopOpener.CloseAll()
-    ShopOpener.RefreshRuntimeObjects()
+local function runOpenDeferred(shopKey, Fluent)
+    task.spawn(function()
+        task.wait()
 
-    local did = false
+        local ok, result = pcall(function()
+            return ShopOpener.Open(shopKey)
+        end)
 
-    for _, entry in ipairs(UiManagers) do
-        local manager = entry.Table
-        local fn = rawget(manager, "closeAll")
+        local data = Config.ShopIds[shopKey]
+        local title = data and data.Display or tostring(shopKey)
 
-        if typeof(fn) == "function" then
-            local ok = select(1, tryCallFunction(fn, manager))
-            if ok then
-                did = true
-                addLog("CLOSE_ALL", "UIManager.closeAll() OK | gc#" .. tostring(entry.Index))
-            end
+        if ok and result then
+            notifySafe(Fluent, title, "Ouverture demandée.")
+        else
+            notifySafe(Fluent, title, "Échec ouverture. Regarde la console.")
+            addLog("ERROR", "Open " .. tostring(shopKey) .. " | " .. tostring(result))
         end
-    end
-
-    for shopKey in pairs(Config.ShopIds) do
-        if ShopOpener.Close(shopKey) then
-            did = true
-        end
-    end
-
-    return did
+    end)
 end
 
 function ShopOpener.Mount(Tabs, Fluent)
@@ -469,98 +383,30 @@ function ShopOpener.Mount(Tabs, Fluent)
         return false, "Onglet Shop introuvable et Window non exposée"
     end
 
-    ShopTab:AddParagraph({
-        Title = "Shop",
-        Content = "Ouvre Gem Shop, Wish et Craft Shop via les vrais controllers du jeu. Pas de Visible=true."
-    })
-
     ShopTab:AddButton({
         Title = "Gem Shop",
-        Description = "Ouvre le Gem Shop avec ses vraies données.",
+        Description = "Ouvre le GemShop.",
         Icon = "lucide/gem",
         Callback = function()
-            local ok = ShopOpener.Open("GemShop")
-            if Fluent and Fluent.Notify then
-                Fluent:Notify({
-                    Title = ok and "Gem Shop" or "Gem Shop",
-                    Content = ok and "Ouverture demandée." or "Échec ouverture. Regarde la console.",
-                    Duration = 4
-                })
-            end
+            runOpenDeferred("GemShop", Fluent)
         end
     })
 
     ShopTab:AddButton({
         Title = "Wish",
-        Description = "Ouvre le menu Wish / Gacha.",
+        Description = "Ouvre Wish.",
         Icon = "lucide/sparkles",
         Callback = function()
-            local ok = ShopOpener.Open("Wish")
-            if Fluent and Fluent.Notify then
-                Fluent:Notify({
-                    Title = "Wish",
-                    Content = ok and "Ouverture demandée." or "Échec ouverture. Regarde la console.",
-                    Duration = 4
-                })
-            end
+            runOpenDeferred("Wish", Fluent)
         end
     })
 
     ShopTab:AddButton({
         Title = "Craft Shop",
-        Description = "Ouvre le Craft Shop avec ses vraies données.",
+        Description = "Ouvre le Craft Shop.",
         Icon = "lucide/hammer",
         Callback = function()
-            local ok = ShopOpener.Open("CraftShop")
-            if Fluent and Fluent.Notify then
-                Fluent:Notify({
-                    Title = "Craft Shop",
-                    Content = ok and "Ouverture demandée." or "Échec ouverture. Regarde la console.",
-                    Duration = 4
-                })
-            end
-        end
-    })
-
-    ShopTab:AddButton({
-        Title = "Fermer tout",
-        Description = "Ferme les shops via UIManager/controller.",
-        Icon = "lucide/panel-top-close",
-        Callback = function()
-            local ok = ShopOpener.CloseAll()
-            if Fluent and Fluent.Notify then
-                Fluent:Notify({
-                    Title = "Shop",
-                    Content = ok and "Fermeture demandée." or "Fermeture non confirmée.",
-                    Duration = 4
-                })
-            end
-        end
-    })
-
-    ShopTab:AddButton({
-        Title = "Copier debug Shop",
-        Description = "Copie les derniers logs du module Shop.",
-        Icon = "lucide/copy",
-        Callback = function()
-            local text = ShopOpener.GetLog()
-            local copied = false
-
-            if setclipboard then
-                copied = pcall(setclipboard, text)
-            end
-
-            if not copied and toclipboard then
-                copied = pcall(toclipboard, text)
-            end
-
-            if Fluent and Fluent.Notify then
-                Fluent:Notify({
-                    Title = "Shop Debug",
-                    Content = copied and "Debug copié." or "Clipboard indisponible.",
-                    Duration = 4
-                })
-            end
+            runOpenDeferred("CraftShop", Fluent)
         end
     })
 
