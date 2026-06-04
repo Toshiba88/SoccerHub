@@ -2,6 +2,7 @@
 --// Loader raw GitHub pour la version modulaire.
 --// Fix : cache-buster sur chaque module pour éviter l'ancien cache raw GitHub.
 --// Restore : pastilles de couleur dans le statut des modules.
+--// Add : onglet Shop via module shop_opener.lua.
 
 local BASE = "https://raw.githubusercontent.com/Toshiba88/SoccerHub/main/"
 local CACHE_BUSTER = tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
@@ -92,6 +93,7 @@ local Index = Get("index", "modules/index.lua", {"logic"})
 local UI = Get("ui", "modules/ui.lua", {"logic"})
 local Config = Get("config", "modules/config.lua", {"ui"})
 local Console = Get("console", "modules/console.lua", {"ui"})
+local ShopOpener = Get("shop_opener", "modules/shop_opener.lua", {})
 
 local function Chunk(value)
     if type(value) == "string" then
@@ -164,6 +166,67 @@ end)
     return table.concat(out, "\n")
 end
 
+local function BuildShopOpenerChunk()
+    local url = BASE .. "modules/shop_opener.lua?v=" .. CACHE_BUSTER
+
+    return [[
+--// SHOP OPENER UI - injecté par main_raw.lua
+pcall(function()
+    if Tabs and Window then
+        Tabs.__Window = Window
+        getgenv().SoccerHubWindow = Window
+        getgenv().SoccerHubTabs = Tabs
+        getgenv().SoccerHubFluent = Fluent
+    end
+end)
+
+task.spawn(function()
+    local shopModuleUrl = "]] .. EscapeLuaString(url) .. [["
+    local shopSource
+
+    local okHttp, httpErr = pcall(function()
+        shopSource = game:HttpGet(shopModuleUrl)
+    end)
+
+    if not okHttp or type(shopSource) ~= "string" or shopSource == "" then
+        if Log then
+            Log("Shop opener HttpGet fail : " .. tostring(httpErr), "[SHOP]")
+        end
+        return
+    end
+
+    local fn, compileErr = loadstring(shopSource)
+    if not fn then
+        if Log then
+            Log("Shop opener compile fail : " .. tostring(compileErr), "[SHOP]")
+        end
+        return
+    end
+
+    local okRun, ShopOpenerModule = pcall(fn)
+    if not okRun or type(ShopOpenerModule) ~= "table" then
+        if Log then
+            Log("Shop opener run fail : " .. tostring(ShopOpenerModule), "[SHOP]")
+        end
+        return
+    end
+
+    if type(ShopOpenerModule.Mount) ~= "function" then
+        if Log then
+            Log("Shop opener Mount introuvable", "[SHOP]")
+        end
+        return
+    end
+
+    local okMount, mountResult = ShopOpenerModule.Mount(Tabs, Fluent)
+
+    if Log then
+        Log("Onglet Shop : " .. tostring(okMount) .. " | " .. tostring(mountResult), "[SHOP]")
+    end
+end)
+]]
+end
+
 local source = table.concat({
     Chunk(Core.logic),
     Chunk(Remotes.logic),
@@ -182,6 +245,7 @@ local source = table.concat({
     Chunk(AntiAfk.ui),
     Chunk(Config.ui),
     Chunk(Console.ui),
+    BuildShopOpenerChunk(),
     Chunk(Core.startup),
 }, "\n\n")
 
