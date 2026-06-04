@@ -42,6 +42,11 @@ Tabs.Tournament = Window:AddTab({
     Icon = "lucide/trophy"
 })
 
+Tabs.Shop = Window:AddTab({
+    Title = "Shop",
+    Icon = "solar/shop-bold"
+})
+
 Tabs.Index = Window:AddTab({
     Title = "Index",
     Icon = "lucide/list-ordered"
